@@ -27,9 +27,13 @@ def fieldname_to_dtype(fieldname):
                        "counter inc."):
         return (fieldname, np.bool_)
     elif fieldname in ("time/s", "P/W", "(Q-Qo)/mA.h", "x", "control/V",
-                       "control/V/mA", "(Q-Qo)/C", "dQ/C", "freq/Hz",
-                       "|Ewe|/V", "|I|/A", "Phase(Z)/deg", "|Z|/Ohm",
-                       "Re(Z)/Ohm", "-Im(Z)/Ohm"):
+                       "control/mA", "control/V/mA", "(Q-Qo)/C", "dQ/C",
+                       "freq/Hz", "|Ewe|/V", "|I|/A", "Phase(Z)/deg",
+                       "|Z|/Ohm", "Re(Z)/Ohm", "-Im(Z)/Ohm"):
+        return (fieldname, np.float_)
+    elif fieldname in ("Q charge/discharge/mA.h", "step time/s",
+                       "Q charge/mA.h", "Q discharge/mA.h",
+                       "Temperature/°C", "Efficiency/%", "Capacity/mA.h"):
         return (fieldname, np.float_)
     elif fieldname in ("cycle number", "I Range", "Ns", "half cycle"):
         return (fieldname, np.int_)
@@ -37,8 +41,15 @@ def fieldname_to_dtype(fieldname):
         return ("dQ/mA.h", np.float_)
     elif fieldname in ("I/mA", "<I>/mA"):
         return ("I/mA", np.float_)
-    elif fieldname in ("Ewe/V", "<Ewe>/V"):
+    elif fieldname in ("Ewe/V", "<Ewe>/V", "Ecell/V"):
         return ("Ewe/V", np.float_)
+    elif fieldname.endswith(("/s", "/Hz", "/deg",
+                             "/W", "/mW", "/W.h", "/mW.h",
+                             "/A", "/mA", "/A.h", "/mA.h",
+                             "/V", "/mV",
+                             "/F", "/mF", "/uF",
+                             "/C", "/Ohm",)):
+        return (fieldname, np.float_)
     else:
         raise ValueError("Invalid column header: %s" % fieldname)
 
@@ -62,7 +73,7 @@ def MPTfile(file_or_path, encoding='ascii'):
         mpt_file = file_or_path
 
     magic = next(mpt_file)
-    if magic != b'EC-Lab ASCII FILE\r\n':
+    if magic not in (b'EC-Lab ASCII FILE\r\n', b'BT-Lab ASCII FILE\r\n'):
         raise ValueError("Bad first line for EC-Lab file: '%s'" % magic)
 
     nb_headers_match = re.match(rb'Nb header lines : (\d+)\s*$',
@@ -185,7 +196,7 @@ VMPdata_colID_dtype_map = {
     169: ('Cs/µF', '<f4'),
     172: ('Cp/µF', '<f4'),
     173: ('Cp-2/µF-2', '<f4'),
-    174: ('<Ewe>/V', '<f4'),
+    174: ('Ewe/V', '<f4'),
     241: ('|E1|/V', '<f4'),
     242: ('|E2|/V', '<f4'),
     271: ('Phase(Z1) / deg', '<f4'),
@@ -209,6 +220,7 @@ VMPdata_colID_dtype_map = {
     433: ('-Im(Zwe-ce)/Ohm', '<f4'),
     434: ('(Q-Qo)/C', '<f4'),
     435: ('dQ/C', '<f4'),
+    438: ('step time/s', '<f8'),
     441: ('<Ecv>/V', '<f4'),
     462: ('Temperature/°C', '<f4'),
     467: ('Q charge/discharge/mA.h', '<f8'),
@@ -233,6 +245,13 @@ VMPdata_colID_dtype_map = {
     495: ('|I h5|/A', '<f4'),
     496: ('|I h6|/A', '<f4'),
     497: ('|I h7|/A', '<f4'),
+    498: ('Q charge/mA.h', '<f8'),
+    499: ('Q discharge/mA.h', '<f8'),
+    500: ('step time/s', '<f8'),
+    501: ('Efficiency/%', '<f8'),
+    502: ('Capacity/mA.h', '<f8'),
+    505: ('Rdc/Ohm', '<f4'),
+    509: ('Acir/Dcir Control', '<u1'),
 }
 
 # These column IDs define flags which are all stored packed in a single byte
@@ -409,11 +428,11 @@ class MPRfile:
             raise ValueError("Unrecognised version for data module: %d" %
                              data_module['version'])
 
-        assert(not any(remaining_headers))
+        assert not any(remaining_headers)
 
         self.dtype, self.flags_dict = VMPdata_dtype_from_colIDs(column_types)
         self.data = np.frombuffer(main_data, dtype=self.dtype)
-        assert(self.data.shape[0] == n_data_points)
+        assert self.data.shape[0] == n_data_points
 
         # No idea what these 'column types' mean or even if they are actually
         # column types at all

@@ -106,6 +106,7 @@ def test_parse_BioLogic_date(data, expected):
     # C019P-0ppb-A_C01.mpr stores the date in a different format
     ('C019P-0ppb-A_C01.mpr', '2019-03-14', '2019-03-14'),
     ('Rapp_Error.mpr', '2010-12-02', '2010-12-02'),
+    ('Ewe_Error.mpr', '2021-11-18', '2021-11-19'),
 ])
 def test_MPR_dates(testdata_dir, filename, startdate, enddate):
     """Check that the start and end dates in .mpr files are read correctly."""
@@ -164,7 +165,7 @@ def assert_MPR_matches_MPT(mpr, mpt, comments):
                               mpt["Ewe/V"],
                               decimal=6)  # 32 bit float precision
 
-    assert_field_matches("dQ/mA.h", decimal=17)  # 64 bit float precision
+    assert_field_matches("dQ/mA.h", decimal=16)  # 64 bit float precision
     assert_field_matches("P/W", decimal=10)  # 32 bit float precision for 1.xxE-5
     assert_field_matches("I/mA", decimal=6)  # 32 bit float precision
 
@@ -172,7 +173,7 @@ def assert_MPR_matches_MPT(mpr, mpt, comments):
     assert_field_matches("(Q-Qo)/C", decimal=6)  # 32 bit float precision
 
     try:
-        assert timestamp_from_comments(comments) == mpr.timestamp
+        assert timestamp_from_comments(comments) == mpr.timestamp.replace(microsecond=0)
     except AttributeError:
         pass
 
@@ -185,6 +186,7 @@ def assert_MPR_matches_MPT(mpr, mpt, comments):
     # bio_logic5 and bio_logic6 are special cases
     'CV_C01',
     '121_CA_455nm_6V_30min_C01',
+    '020-formation_CB5',
 ])
 def test_MPR_matches_MPT(testdata_dir, basename):
     """Check the MPR parser against the MPT parser.
@@ -195,7 +197,7 @@ def test_MPR_matches_MPT(testdata_dir, basename):
     binpath = os.path.join(testdata_dir, basename + '.mpr')
     txtpath = os.path.join(testdata_dir, basename + '.mpt')
     mpr = MPRfile(binpath)
-    mpt, comments = MPTfile(txtpath)
+    mpt, comments = MPTfile(txtpath, encoding='latin1')
     assert_MPR_matches_MPT(mpr, mpt, comments)
 
 

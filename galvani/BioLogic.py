@@ -16,6 +16,8 @@ from collections import defaultdict, OrderedDict
 
 import numpy as np
 
+from re import finditer
+import struct
 
 def fieldname_to_dtype(fieldname):
     """Converts a column header from the MPT file into a tuple of
@@ -333,42 +335,47 @@ def VMPdata_dtype_from_colIDs(colIDs):
                                               prev=type_list[-1][0]))
     return np.dtype(type_list), flags_dict
 
+def read_VMP_modules(fileobj):
+    fileobj.seek(0)
+    b = fileobj.read()
+    pattern = b'MODULE(?s:.{43,51})(\d{2})\/(\d{2})\/(\d{2})'
+    mj = [i for i in finditer(pattern,b)]
 
-def read_VMP_modules(fileobj, read_module_data=True):
-    """Reads in module headers in the VMPmodule_hdr format. Yields a dict with
-    the headers and offset for each module.
-
-    N.B. the offset yielded is the offset to the start of the data i.e. after
-    the end of the header. The data runs from (offset) to (offset+length)"""
-    while True:
-        module_magic = fileobj.read(len(b'MODULE'))
-        if len(module_magic) == 0:  # end of file
-            break
-        elif module_magic != b'MODULE':
-            raise ValueError("Found %r, expecting start of new VMP MODULE"
-                             % module_magic)
-
-        hdr_bytes = fileobj.read(VMPmodule_hdr.itemsize)
-        if len(hdr_bytes) < VMPmodule_hdr.itemsize:
-            raise IOError("Unexpected end of file while reading module header")
-
-        hdr = np.frombuffer(hdr_bytes, dtype=VMPmodule_hdr, count=1)
-        hdr_dict = dict(((n, hdr[n][0]) for n in VMPmodule_hdr.names))
-        hdr_dict['offset'] = fileobj.tell()
-        if read_module_data:
-            hdr_dict['data'] = fileobj.read(hdr_dict['length'])
-            if len(hdr_dict['data']) != hdr_dict['length']:
-                raise IOError("""Unexpected end of file while reading data
-                    current module: %s
-                    length read: %d
-                    length expected: %d""" % (hdr_dict['longname'],
-                                              len(hdr_dict['data']),
-                                              hdr_dict['length']))
-            yield hdr_dict
+    d = []
+    for mk in mj:
+        s = mk.group()
+        offset = mk.span()[1]
+        di = {'shortname':s[6:16],
+              'longname':s[16:41],
+              'date':s[-8:]}
+        if len(s)==65:
+            length = struct.unpack('i',s[45:49])[0]
+            version = struct.unpack('i',s[53:57])[0] 
         else:
-            yield hdr_dict
-            fileobj.seek(hdr_dict['offset'] + hdr_dict['length'], SEEK_SET)
+            length = struct.unpack('i',s[41:45])[0]
+            version = struct.unpack('i',s[45:49])[0]
+        di.update({'length':length,
+                   'version':version,
+                   'offset':offset})
+        if di['shortname']==b'VMP data  ':
+            npoints = struct.unpack('I',b[offset:offset+4])[0]
+            di.update({'n_data_points':npoints})
+            if version<11:
+                ncols = struct.unpack('B',b[offset+4:offset+5])[0]
+                i = 5
+            else:
+                ncols = struct.unpack('H',b[offset+4:offset+6])[0]
+                i = 6
+            column_types = struct.unpack(ncols*'H',b[offset+i:offset+i+2*ncols])
+            di.update({'n_columns':ncols})
+            di.update({'column_types':column_types})
 
+            print([VMPdata_colID_dtype_map[i] for i in column_types
+                   if i in VMPdata_colID_dtype_map.keys()])
+        print(di)
+        di.update({'data':b[offset:offset+length]})
+        d.append(di)
+    return d
 
 MPR_MAGIC = b'BIO-LOGIC MODULAR FILE\x1a'.ljust(48) + b'\x00\x00\x00\x00'
 

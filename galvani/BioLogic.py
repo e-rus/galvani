@@ -146,12 +146,6 @@ def MPTfileCSV(file_or_path):
     return mpt_csv, comments
 
 
-VMPmodule_hdr = np.dtype([('shortname', 'S10'),
-                          ('longname', 'S25'),
-                          ('length', '<u4'),
-                          ('version', '<u4'),
-                          ('date', 'S8')])
-
 # Maps from colID to a tuple defining a numpy dtype
 VMPdata_colID_dtype_map = {
     4: ('time/s', '<f8'),
@@ -426,6 +420,7 @@ class MPRfile:
             # There are bytes of data before the main array starts
             if data_module['version'] == 3:
                 num_bytes_before = 406  # version 3 added `\x01` to the start
+                offset = 5 + 2 * n_columns
             elif data_module['version']==11:
                 num_bytes_before = 1007
                 offset = 6 + 2 * n_columns

@@ -413,23 +413,25 @@ class MPRfile:
         maybe_loop_module = [m for m in modules if m['shortname'] == b'VMP loop  ']
         maybe_log_module = [m for m in modules if m['shortname'] == b'VMP LOG   ']
 
-        n_data_points = np.frombuffer(data_module['data'][:4], dtype='<u4')
-        n_columns = np.frombuffer(data_module['data'][4:5], dtype='u1').item()
+        n_data_points = data_module['n_data_points']
+        n_columns = data_module['n_columns']
 
         if data_module['version'] == 0:
             column_types = np.frombuffer(data_module['data'][5:], dtype='u1',
                                          count=n_columns)
             remaining_headers = data_module['data'][5 + n_columns:100]
             main_data = data_module['data'][100:]
-        elif data_module['version'] in [2, 3]:
-            column_types = np.frombuffer(data_module['data'][5:], dtype='<u2',
-                                         count=n_columns)
+        elif data_module['version'] in [2, 3, 11]:
+            column_types = data_module['column_types']
             # There are bytes of data before the main array starts
             if data_module['version'] == 3:
                 num_bytes_before = 406  # version 3 added `\x01` to the start
+            elif data_module['version']==11:
+                num_bytes_before = 1007
+                offset = 6 + 2 * n_columns
             else:
                 num_bytes_before = 405
-            remaining_headers = data_module['data'][5 + 2 * n_columns:405]
+            remaining_headers = data_module['data'][offset:405]
             main_data = data_module['data'][num_bytes_before:]
         else:
             raise ValueError("Unrecognised version for data module: %d" %

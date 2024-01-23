@@ -421,7 +421,7 @@ class MPRfile:
             if data_module['version'] == 3:
                 num_bytes_before = 406  # version 3 added `\x01` to the start
                 offset = 5 + 2 * n_columns
-            elif data_module['version']==11:
+            elif data_module['version'] == 11:
                 num_bytes_before = 1007
                 offset = 6 + 2 * n_columns
             else:
